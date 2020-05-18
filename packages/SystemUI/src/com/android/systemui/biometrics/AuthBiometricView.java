@@ -23,7 +23,9 @@ import android.animation.ValueAnimator;
 import android.annotation.IntDef;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
+import android.annotation.SdkConstant;
 import android.content.Context;
+import android.content.pm.PackageManager;
 import android.hardware.biometrics.BiometricPrompt;
 import android.os.Bundle;
 import android.os.Handler;
@@ -40,6 +42,8 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import com.android.internal.annotations.VisibleForTesting;
+import com.android.systemui.statusbar.phone.StatusBar;
+import com.android.systemui.Dependency;
 import com.android.systemui.R;
 
 import java.lang.annotation.Retention;
@@ -87,6 +91,9 @@ public abstract class AuthBiometricView extends LinearLayout {
     @IntDef({STATE_IDLE, STATE_AUTHENTICATING_ANIMATING_IN, STATE_AUTHENTICATING, STATE_HELP,
             STATE_ERROR, STATE_PENDING_CONFIRMATION, STATE_AUTHENTICATED})
     @interface BiometricState {}
+
+    @SdkConstant(SdkConstant.SdkConstantType.FEATURE)
+    private static final String FOD_FEATURE_NAME = "vendor.calyx.biometrics.fingerprint.inscreen";
 
     /**
      * Callback to the parent when a user action has occurred.
@@ -186,6 +193,8 @@ public abstract class AuthBiometricView extends LinearLayout {
     protected boolean mDialogSizeAnimating;
     protected Bundle mSavedState;
 
+    protected boolean mHasFod;
+
     /**
      * Delay after authentication is confirmed, before the dialog should be animated away.
      */
@@ -247,6 +256,10 @@ public abstract class AuthBiometricView extends LinearLayout {
         mInjector.mBiometricView = this;
 
         mAccessibilityManager = context.getSystemService(AccessibilityManager.class);
+
+        PackageManager packageManager = context.getPackageManager();
+        mHasFod = packageManager.hasSystemFeature(PackageManager.FEATURE_FINGERPRINT) &&
+                packageManager.hasSystemFeature(FOD_FEATURE_NAME);
 
         mResetErrorRunnable = () -> {
             updateState(getStateForAfterError());
@@ -703,9 +716,22 @@ public abstract class AuthBiometricView extends LinearLayout {
             final View child = getChildAt(i);
 
             if (child.getId() == R.id.biometric_icon) {
-                child.measure(
-                        MeasureSpec.makeMeasureSpec(newWidth, MeasureSpec.AT_MOST),
-                        MeasureSpec.makeMeasureSpec(height, MeasureSpec.AT_MOST));
+                if (this instanceof AuthBiometricFingerprintView && mHasFod) {
+                    final int buttonBarHeight =
+                            findViewById(R.id.button_bar).getLayoutParams().height;
+                    // The view is invisible, so it still takes space and
+                    // we use that to adjust for the FOD icon
+                    final int fodHeight = Dependency.get(StatusBar.class).getFodHeight(true) -
+                            buttonBarHeight - findViewById(R.id.button_bar).getPaddingTop();
+
+                    child.measure(
+                            MeasureSpec.makeMeasureSpec(newWidth, MeasureSpec.AT_MOST),
+                            MeasureSpec.makeMeasureSpec(fodHeight, MeasureSpec.EXACTLY));
+                } else {
+                    child.measure(
+                            MeasureSpec.makeMeasureSpec(newWidth, MeasureSpec.AT_MOST),
+                            MeasureSpec.makeMeasureSpec(height, MeasureSpec.AT_MOST));
+                }
             } else if (child.getId() == R.id.button_bar) {
                 child.measure(
                         MeasureSpec.makeMeasureSpec(newWidth, MeasureSpec.EXACTLY),

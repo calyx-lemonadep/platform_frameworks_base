@@ -27,6 +27,7 @@ import static com.android.internal.widget.LockPatternUtils.StrongAuthTracker.STR
 import static com.android.internal.widget.LockPatternUtils.StrongAuthTracker.STRONG_AUTH_REQUIRED_FOR_UNATTENDED_UPDATE;
 import static com.android.systemui.DejankUtils.whitelistIpcs;
 
+import android.annotation.SdkConstant;
 import android.app.ActivityManager;
 import android.app.ActivityTaskManager;
 import android.app.AlarmManager;
@@ -38,6 +39,7 @@ import android.content.ContentResolver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.pm.PackageManager;
 import android.content.pm.UserInfo;
 import android.hardware.biometrics.BiometricSourceType;
 import android.media.AudioAttributes;
@@ -165,6 +167,9 @@ public class KeyguardViewMediator extends SystemUI implements Dumpable {
             "com.android.internal.policy.impl.PhoneWindowManager.DELAYED_LOCK";
 
     private static final String SYSTEMUI_PERMISSION = "com.android.systemui.permission.SELF";
+
+    @SdkConstant(SdkConstant.SdkConstantType.FEATURE)
+    private static final String FOD_FEATURE_NAME = "vendor.calyx.biometrics.fingerprint.inscreen";
 
     // used for handler messages
     private static final int SHOW = 1;
@@ -386,6 +391,8 @@ public class KeyguardViewMediator extends SystemUI implements Dumpable {
     private boolean mWakeAndUnlocking;
     private IKeyguardDrawnCallback mDrawnCallback;
     private CharSequence mCustomMessage;
+
+    private boolean mHasFod;
 
     private final DeviceConfig.OnPropertiesChangedListener mOnPropertiesChangedListener =
             new DeviceConfig.OnPropertiesChangedListener() {
@@ -755,6 +762,8 @@ public class KeyguardViewMediator extends SystemUI implements Dumpable {
                 QuickStepContract.isGesturalMode(navigationModeController.addListener(mode -> {
                     mInGestureNavigationMode = QuickStepContract.isGesturalMode(mode);
                 }));
+        PackageManager packageManager = context.getPackageManager();
+        mHasFod = packageManager.hasSystemFeature(FOD_FEATURE_NAME);
     }
 
     public void userActivity() {
@@ -886,7 +895,9 @@ public class KeyguardViewMediator extends SystemUI implements Dumpable {
             // explicitly DO NOT want to call
             // mKeyguardViewControllerLazy.get().setKeyguardGoingAwayState(false)
             // here, since that will mess with the device lock state.
-            mUpdateMonitor.dispatchKeyguardGoingAway(false);
+            if (!mHasFod) {
+                mUpdateMonitor.dispatchKeyguardGoingAway(false);
+            }
 
             // Lock immediately based on setting if secure (user has a pin/pattern/password).
             // This also "locks" the device when not secure to provide easy access to the

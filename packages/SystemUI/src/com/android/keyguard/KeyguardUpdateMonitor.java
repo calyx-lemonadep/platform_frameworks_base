@@ -34,6 +34,7 @@ import static com.android.systemui.DejankUtils.whitelistIpcs;
 import android.annotation.AnyThread;
 import android.annotation.MainThread;
 import android.annotation.NonNull;
+import android.annotation.SdkConstant;
 import android.app.ActivityManager;
 import android.app.ActivityTaskManager;
 import android.app.AlarmManager;
@@ -210,6 +211,8 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, Dumpab
     private static final ComponentName FALLBACK_HOME_COMPONENT = new ComponentName(
             "com.android.settings", "com.android.settings.FallbackHome");
 
+    @SdkConstant(SdkConstant.SdkConstantType.FEATURE)
+    private static final String FOD_FEATURE_NAME = "vendor.calyx.biometrics.fingerprint.inscreen";
 
     /**
      * If true, the system is in the half-boot-to-decryption-screen state.
@@ -308,6 +311,7 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, Dumpab
     };
 
     private final Handler mHandler;
+    private final boolean mHasFod;
 
     private final Observer<Integer> mRingerModeObserver = new Observer<Integer>() {
         @Override
@@ -1689,6 +1693,9 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, Dumpab
             }
         };
 
+        mHasFod = mContext.getPackageManager().hasSystemFeature(
+                FOD_FEATURE_NAME);
+
         // Since device can't be un-provisioned, we only need to register a content observer
         // to update mDeviceProvisioned when we are...
         if (!mDeviceProvisioned) {
@@ -1852,7 +1859,8 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, Dumpab
             return;
         }
         mHandler.removeCallbacks(mRetryFingerprintAuthentication);
-        boolean shouldListenForFingerprint = shouldListenForFingerprint();
+        boolean hideFodForStrongAuth = mHasFod && userNeedsStrongAuth();
+        boolean shouldListenForFingerprint = !hideFodForStrongAuth && shouldListenForFingerprint();
         boolean runningOrRestarting = mFingerprintRunningState == BIOMETRIC_STATE_RUNNING
                 || mFingerprintRunningState == BIOMETRIC_STATE_CANCELLING_RESTARTING;
         if (runningOrRestarting && !shouldListenForFingerprint) {
